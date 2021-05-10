@@ -1,0 +1,261 @@
+---
+title: "Project 2 Modeling, Testing, and Predicting"
+author: "SDS348"
+date: "May 7, 2021"
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+  pdf_document:
+    toc: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, fig.align = "center", warning = F, message = F,
+                      tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
+```
+
+## Adaylin Alvarez aa77336
+---
+
+#### 0. Introduce your dataset and each of your variables (or just your main variables if you have lots) in a paragraph. What are they measuring? How many observations?
+
+```{r}
+library(robustbase)
+CrohnD
+```
+*The `ChronD` daraset was from an experimental study on 117 patients — 117 observations — affected by Crohn's disease, which is a chronic inflammatory bowel disease that affects the lining of the digestive tract and is localized in the intestines. It contains 9 variables: `ID` (a unique number for each patient, also known as a patient ID), `nrAdvE` (the number of adverse events), `BMI` (body mass index, which is measured in units of kg/m^2), `height` (measured in centimeters), `country` (a dichotomous variable where a patient is either from country 1 — `c1` — or country 2 — `c2`), `sex` (M, male or F, female), `age` (measured in years), `weight` (measured in kilograms), and `treat` (which is the type of one of three treatments: placebo, drug 1 — `d1` — or drug 2 — `d2`).*
+
+---
+
+#### 1. Perform a MANOVA testing whether any of your numeric variables (or a subset of them, if including them all is unreasonable or doesn't make sense) show a mean difference across levels of one of your categorical variables (3). If they do, perform univariate ANOVAs to find response(s) showing a mean difference across groups (3), and perform post-hoc t tests to find which groups differ (3). Discuss the number of tests you have performed, calculate the probability of at least one type I error (if unadjusted), and adjust the significance level accordingly (bonferroni correction) before discussing significant differences (3). Briefly discuss some of the MANOVA assumptions and whether or not they are likely to have been met here (no need for anything too in-depth) (2).
+
+```{r}
+library(rstatix)
+
+group <- CrohnD$treat 
+DVs <- CrohnD %>% select(nrAdvE,BMI,height,age,weight)
+
+sapply(split(DVs,group), mshapiro_test) #Test multivariate normality for each group (null: assumption met)
+#the p-value is less than .05, meaning the assumption is violated. 
+
+man1 <- manova(cbind(nrAdvE,BMI,height,age,weight)~treat,data=CrohnD)
+summary(man1)
+
+1-(0.95^1) #chance of type I error 
+0.05/1 #Bonferroni correction
+```
+*The numerical variables of number of adverse events, weight, height, and BMI were all tested to see if there was a mean difference across the three treatment groups: placebo, d1, and d2. Multivariate normality was tested for each group, with all three groups reporting p-values of less than 0.05, thus violating the initial assumption. Because the MANOVA test was not significant, no univariate ANOVAs or post-hoc t-tests were performed. The alpha value remained at 0.05. There is a 0.05 chance of a type I error occuring, or 5% chance. Regarding MANOVA assumptions, this is most likely a non-random sample because this dataset consists of patient data that was used in an experimental research study. We can assume that the observations are independent from one another because each observation represents an individual patient. This data does not meet the multivariate normality assumption — the further assumptions of homogeneity of within-group covariance matrices and lack of extreme univariate/covariate outliers were also not met. This data also most likely does not meet the MANOVA assumption of no multicolinearity becusee the variables of weight, height, and BMI are related to each other, meaning they are correlated.*
+
+---
+
+#### 2. Perform some kind of randomization test on your data (that makes sense). The statistic can be anything you want (mean difference, correlation, F-statistic/ANOVA, chi-squared), etc. State null and alternative hypotheses, perform the test, and interpret the results (7). Create a plot visualizing the null distribution and the test statistic (3).
+
+```{r}
+library(tidyverse)
+library(vegan)
+dist <- DVs %>% dist()
+adonis(dist~treat,data=CrohnD)
+
+
+SSW <- CrohnD %>% group_by(treat) %>% select(nrAdvE, BMI, height, weight) %>% do(d=dist(.[2:3],"euclidean")) %>% ungroup() %>% summarize(sum(d[[1]]^2)/50 + sum(d[[2]]^2)/50 + sum(d[[3]]^2)/50)%>%pull
+SST <- sum(dist^2) / 117
+obs_F <- ((SST-SSW)/2)/(SSW/114)
+
+Fvals <- replicate(1000,{
+new <- CrohnD %>% mutate(treat=sample(treat))
+SSW <- new %>% group_by(treat) %>% select(nrAdvE, BMI, height, weight) %>% do(d=dist(.[2:3],"euclidean")) %>% ungroup() %>% summarize(sum(d[[1]]^2)/50 + sum(d[[2]]^2)/50 + sum(d[[3]]^2)/50) %>% pull
+((SST-SSW)/2)/(SSW/114) })
+
+mean(Fvals > obs_F)
+
+hist(Fvals, prob = T)
+abline(v = obs_F, col="red", add = T)
+```
+*My null hypothesis is that the center and spread of the three treatment groups are the same. My alternate hypothesis is that at lest one of the cenetrs and/or spread of one treatment group is different from the other two groups. Because the p-value is greater than 0.05, we fail to reject the null hypothesis and that means that there is no significant difference of centers and spreads between the three treatment groups.*
+
+---
+
+#### 3. Build a linear regression model predicting one of your response variables from at least 2 other variables, including their interaction. Mean-center any numeric variables involved in the interaction.
+
+    - Interpret the coefficient estimates (do not discuss significance) (10)
+    - Plot the regression using `ggplot()` using geom_smooth(method="lm"). If your interaction is numeric by numeric, refer to code in the slides to make the plot or check out the `interactions` package, which makes this easier. If you have 3 or more predictors, just chose two of them to plot for convenience. (10)
+    - What proportion of the variation in the outcome does your model explain? (4)
+    - Check assumptions of linearity, normality, and homoskedasticity either graphically or using a hypothesis test (5)
+    - Regardless, recompute regression results with robust standard errors via `coeftest(..., vcov=vcovHC(...))`. Discuss significance of results, including any changes from before/after robust SEs if applicable. (10)
+
+```{r}
+CrohnD$nrAdvEc <- CrohnD$nrAdvE - mean(CrohnD$nrAdvE)
+CrohnD$heightc <- CrohnD$height - mean(CrohnD$height)
+CrohnD$weightc <- CrohnD$weight - mean(CrohnD$weight)
+CrohnD$BMIc <- CrohnD$BMI - mean(CrohnD$BMI)
+
+CrohnD <- CrohnD %>% mutate(treat = as.factor(treat))
+fit <- lm(nrAdvE ~ treat*weightc, data = CrohnD)
+summary(fit)
+
+coef(fit)
+
+CrohnD %>% ggplot(aes(weightc, nrAdvE, color=treat)) + geom_point() + geom_smooth(method = 'lm', se = F, fullrange = T) + ggtitle("Linear Regression Prediction of Number of Adverse Events with Weight and Treatment") + ylab("Number of Adverse Events") + xlab("Weight") + labs(color = "Treatment")
+
+residual <- lm(nrAdvE ~ treat*weightc, data=CrohnD)$residuals
+shapiro.test(residual) 
+
+library(lmtest)
+bptest(fit)
+
+CrohnD %>% filter(treat == "placebo") %>% ggplot(aes(weightc, nrAdvE)) + geom_point()
+
+CrohnD %>% filter(treat == "d1") %>% ggplot(aes(weightc, nrAdvE)) + geom_point()
+
+CrohnD %>% filter(treat == "d2") %>% ggplot(aes(weightc, nrAdvE)) + geom_point()
+
+library(sandwich)
+coeftest(fit, vcov=vcovHC(fit))
+
+```
+*The predicted number of adverse events for a patient with an average weight within the `placebo` treatment group is 2.4378218 events. Patients with an average weight in the `d1` treatment group had 0.82382958 fewer adverse events than those in the `placebo` treatment group. Patients with an average weight in the `d2` treatment group had 0.23671099 fewer adverse events than those in the `placebo` treatment group. As weight increases by 1 for pateints in the `placebo` treatment group, the predicted number of adverse events goes up by 0.03058350. The slope for weight on the number of adverse events for the `d1` treatment group is 0.01026360 lower than that for the `placebo` treatment group. The slope for weight on the number of adverse events for the `d2` treatment group is 0.05334432  lower than that for the `placebo` treatment group. The normality check conducted put out a p-value less 0.05 which fails the normality assumption. The homoskedasticity check conducted was failed to reject (p > 0.05), therefore it is homoskedastic. The linearilty check remains unclear as linearity is not clear from the graphs above. The robust standard errors test showed that no variable demonstrated any significance, which agrees with the initial linear regression test. According to the R^2 value calculated in the initial linear regression, our model explains 3.21% of variability in number of adverse events.*
+
+---
+
+#### 4. Rerun same regression model (with the interaction), but this time compute bootstrapped standard errors (either by resampling observations or residuals). Discuss any changes you observe in SEs and p-values using these SEs compared to the original SEs and the robust SEs)
+
+```{r}
+bootdata <- sample_frac(CrohnD, replace = T)
+sampdist <- replicate(5000, {
+bootdata <- sample_frac(CrohnD, replace=T) 
+fit <- lm(nrAdvE~weightc*treat, data=bootdata)
+coef(fit)
+})
+
+summary(fit)
+
+sampdist %>% t %>% as.data.frame %>% summarize_all(sd)
+
+```
+*The bootstrapped standard errors are  similar to the original and robust standard errors from earlier calculations. The p-values remain to be the same, mwaning that the bootstrapped standard errors don't make any of the variables significant.*
+
+---
+
+#### 5. Fit a logistic regression model predicting a binary variable (if you don't have one, make/get one) from at least two explanatory variables (interaction not necessary). 
+
+```{r}
+CrohnD <- CrohnD %>% mutate(treatb = ifelse(treat=="placebo",0,1))
+fit1 <- glm(treatb~weightc+nrAdvE, data = CrohnD, family = binomial(link = "logit"))
+coeftest(fit1)
+
+exp(coef(fit1))
+predicted <- predict(fit1, type = "response")
+pred <- ifelse(predicted > .5,1,0)
+table(prediction=pred, truth = CrohnD$treatb) %>% addmargins
+
+(2+78)/117 #accuracy test
+78/78 #TPR
+2/39 #TNF
+78/115 #PPV
+
+CrohnD$logit <- predict(fit1, data = CrohnD, type = "link")
+CrohnD$treatb = factor(CrohnD$treatb, levels = c("1","0"))
+CrohnD <- CrohnD %>% mutate(treatment = ifelse(treat=="placebo", "placebo","drug"))
+
+CrohnD %>% ggplot(aes(logit, fill = treatment)) + geom_density(alpha = .3) + geom_vline(xintercept = 0, lty = 2) + ggtitle("Log-odds Density per Treatment Group")
+
+library(plotROC)
+CrohnD <- CrohnD %>% mutate(treatb=ifelse(treat=='placebo',0,1))
+CrohnD$prob <- predict(fit1, type = "response")
+ROCplot <- ggplot(CrohnD) + geom_roc(aes(d = treatb, m = prob), n.cuts = 0)
+ROCplot
+
+calc_auc(ROCplot)
+```
+*For every unit increase in weight, the odds of a patient receiving a drug that isn't a placebo increases by 1.0062643. For every unit increase in the number of adverse events, the odds of a patient receiving a drug that isn't a placebo increases by 0.9282149.The model has an accuracy of 68.38% — the model correctly classified 68.38% of those cases. Additionally, the model has a TPR of 100% — 100% of patients receiving the actual drug were correctly classified. The TNR of the model was 5.13% —  5.13% of patients in the `placebo` group were correctly classified. This model also has a PPV of 67.83% — 67.83% of patients classified as being from a drug group were actually from a drug group. The ROC plot above displays an AUC value of 0.5691979 — this not a great model for predicting a patient's treatment group.*
+
+---
+
+#### 6. Perform a logistic regression predicting the same binary response variable from *ALL* of the rest of your variables (the more, the better!) 
+
+    - Fit model, compute in-sample classification diagnostics (Accuracy, Sensitivity, Specificity, Precision, AUC), and interpret (5)
+    - Perform 10-fold (or repeated random sub-sampling) CV with the same model and report average out-of-sample classification diagnostics (Accuracy, Sensitivity, Specificity, Precision, and AUC); interpret AUC and compare with the in-sample metrics (10)
+    - Perform LASSO on the same model/variables. Choose lambda to give the simplest model whose accuracy is near that of the best (i.e., `lambda.1se`). Discuss which variables are retained. (5)
+    - Perform 10-fold CV using only the variables lasso selected: compare model's out-of-sample AUC to that of your logistic regressions above (5)
+    
+```{r}
+class_diag <- function(probs,truth){
+tab <- table(factor(probs>.5,levels=c("FALSE","TRUE")),truth)
+acc = sum(diag(tab))/sum(tab)
+sens = tab[2,2]/colSums(tab)[2]
+spec = tab[1,1]/colSums(tab)[1]
+ppv = tab[2,2]/rowSums(tab)[2]
+f1=2*(sens*ppv)/(sens+ppv)
+
+if(is.numeric(truth)==FALSE & is.logical(truth)==FALSE) truth<-as.numeric(truth)-1
+
+ord <- order(probs, decreasing=TRUE)
+probs <- probs[ord]; truth <- truth[ord]
+
+TPR = cumsum(truth)/max(1,sum(truth)) 
+FPR = cumsum(!truth)/max(1,sum(!truth))
+  
+dup <- c(probs[-1]>=probs[-length(probs)], FALSE)
+TPR <- c(0,TPR[!dup],1); FPR<-c(0,FPR[!dup],1)
+n <- length(TPR)
+auc <- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+
+ data.frame(acc,sens,spec,ppv,f1,auc)}
+
+
+fit = glm(treatb ~ heightc + BMIc, data = CrohnD, family = "binomial")
+prob = predict(fit, type = "response")
+class_diag(prob, CrohnD$treatb)
+
+CrohnD <- CrohnD %>% mutate(y=ifelse(treatb == "0", 0, 1))
+set.seed(1234)
+k=10 
+data <- CrohnD[sample(nrow(CrohnD)),] 
+folds <- cut(seq(1:nrow(CrohnD)),breaks=k,labels=F) 
+diags <- NULL
+
+for(i in 1:k){
+train <- data[folds!=i,]
+test <- data[folds==i,]
+truth <- test$y
+
+fit <- glm(y~heightc+BMIc,data=train,family="binomial")
+
+probs <- predict(fit,newdata = test,type="response")
+
+diags <- rbind(diags,class_diag(probs,truth))}
+
+summarize_all(diags,mean)
+
+
+library(glmnet)
+CrohnD2 <- CrohnD %>% select(2:9, treatb, -treat)
+y <- as.matrix(CrohnD2$treatb)
+x <- model.matrix(treatb~1+., data=CrohnD2)
+head(x)
+
+cv <- cv.glmnet(x,y, family = "binomial")
+lasso <- glmnet(x,y, family = "binomial", lambda = cv$lambda.1se)
+coef(lasso)
+
+set.seed(1234)
+k=10 
+data <- CrohnD[sample(nrow(CrohnD)),] 
+folds <- cut(seq(1:nrow(CrohnD)),breaks=k,labels=F) 
+diags <- NULL
+
+for(i in 1:k){
+
+train <- data[folds!=i,]
+test <- data[folds==i,]
+truth <- test$treatb
+
+fit <- glm(treatb~nrAdvE,data=train,family="binomial")
+probs <- predict(fit,newdata = test,type="response")
+diags <- rbind(diags,class_diag(probs,truth))}
+
+summarize_all(diags,mean)
+```
+*In-sample diagnostics of the linear regression model predicting treatment group with height and BMI were run. Accuracy was 66.67% — the model correctly classified 66.67% of cases. The sensitivity was 1 — 100% of actual drug group patients were correctly classified as being of the drug group. The specificity was 0 — none of the patients from the placebo group were correctly classified. The PPV is 66.67% — 66.67% of those classified as part of the drug group actually are a part of the drug group. The 10 fold cross validation model demonstrated 66.52% accuracy, 100% sensitivity, 0% specificity, and 66.52% PPV. The AUC value is 0.4630093 — indicating that this is not a great model for predicting treatment group. From the LASSO regression test, it seems that none of the variables were retained. As a result, we will be arbitrarily choosing number of adverse events for the next model. The AUC for the out-of-sample model is 0.5339815, which is better than the original in-sample model's AUC value of 0.4630093. Since this model has a larger AUC value more than just a few hundredths, I assume that the original model was overfitted.*

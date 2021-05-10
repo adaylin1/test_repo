@@ -1,0 +1,201 @@
+---
+title: "Project 1: Deaths from Measles and Whooping Cough in London"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, fig.align = "center", warning = F, message = F,
+tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
+```
+
+## Adaylin Alvarez aa77336
+
+---
+
+#### 0. Introduction: 
+- Write a narrative introductory paragraph or two describing the datasets you have chosen, the variables they contain, how they were acquired, and why they are interesting to you. Expand on potential associations you may expect, if any.
+
+```{r}
+library(DAAG)
+library(dplyr)
+library(ggplot2)
+
+glimpse(whoops)
+glimpse(poxetc)
+```
+*As a freshman at UT, I worked in an antibiotics laboratory where we conducted research, mainly, on Streptomyces bacteria and a few viruses. The goal of our research was to determine the reasons behind the increased resistance in bacteria against antibiotics and the resistance in viruses against antiviral medication. Due to my past experience in working with both bacteria and viruses as well as my interest in microbiology, I narrowed down my project to examine and compare three of the most infamous bacterial - whooping cough - and  viral - measles and smallpox - diseases. Both the `whoops` and `poxetc` datasets examine cases of deaths relating to whooping cough, smallpox, and measles in London. The `whoops` dataset examines deaths from whooping cough, in London from 1740 to 1881, by documenting deaths caused by whooping cough, all deaths, and the ratio between the two within the time frame. The `poxetc` dataset examines deaths relating to smallpox and measles, in London from 1629 to 1881, by documenting deaths caused by smallpox and measles along with deaths from all causes and the ratio between smallpx and all deaths and measles and all deaths within the time frame. *
+
+
+
+#### 1. Tidying: Rearranging Wide/Long (10 pts): Tidy the datasets (using the `tidyr` functions `pivot_longer`/`gather` and/or `pivot_wider`/`spread`). If you data sets are already tidy, be sure to use those functions somewhere else in your project (e.g., for rearranging summary statistics). Document the process (describe in words what was done).
+
+```{R}
+library(tidyverse)
+library(tibble)
+library(lubridate)
+library(ggplot2)
+
+poxetc <- poxetc %>% as.data.frame() %>% mutate(date=1629:1881) %>% rename("smpox"=fpox, "smpox2all"=fpox2all, "alldeaths"=all)
+whoops <- whoops %>% as.data.frame() %>% mutate(date=1740:1881) %>% rename("wcough2all"=ratio)
+
+glimpse(poxetc)
+glimpse(whoops)
+
+poxetc_2 <- poxetc %>% unite(measles, measles2all, col="measles/measles2all", sep="/")
+poxetc_3 <- poxetc_2 %>% unite(smpox, smpox2all, col="smpox/smpox2all", sep="/")
+
+tidypox <- poxetc_3 %>% pivot_longer(contains("/")) %>% separate(value, into=c("cases", "ratio2all"), sep="/") %>% separate(name, into=c("disease","ratiodisease")) %>% pivot_wider(names_from="disease", values_from="cases") %>% pivot_wider(names_from="ratiodisease", values_from="ratio2all") %>% group_by(date) %>%  summarise_all(funs(toString(na.omit(.)))) %>% separate(alldeaths, c("alldeaths", NA), sep=", ")
+
+
+
+whoops_2 <- whoops %>% unite(wcough, wcough2all, col="whoops/whoops2all", sep="/")
+tidywhoops <- whoops_2 %>% pivot_longer(contains("/")) %>% separate(value, into=c("wcough", "wcough2all"), sep="/") %>% select(-name)
+
+glimpse(tidypox)
+glimpse(tidywhoops)
+```
+
+
+
+#### 2. Joining/Merging (10 pts): 
+- Join your datasets into one using a `dplyr` join function
+- If you have multiple observations on the joining variable in either dataset, fix this by collapsing via summarize
+- Discuss the process in words, including why you chose the join you did
+- Discuss which cases were dropped, if any, and potential problems with this
+
+```{r}
+
+diseases_messy <- inner_join(whoops, poxetc, by = c("date" = "date")) %>% select(-alldeaths.x) %>% rename("alldeaths"=alldeaths.y)
+
+diseases <- diseases_messy[, c(3, 1, 4, 5, 2, 7, 8, 6)]
+
+diseases %>% nrow()
+diseases %>% summarise_all(funs(sum(is.na(.))))
+diseases %>% tidyr::drop_na() %>% nrow()
+diseases <- diseases %>% tidyr::drop_na()
+diseases
+```
+*Both the `poxetc` and `whoops` datasets were joined using the `inner_join` function because I wanted to compare all documented cases  to each other as well as to all deaths. Because both datasets had the same values for `alldeaths`, I only kept one of the columns. In order to clean the joined dataset and make it look nicer, I rearranged the columns to allow an easy comparison between individual cases and between ratios of cases to all deaths. This then allowed for me to easily see the missing values, which were eliminated because there were no values for any numeric column of interest - other than all deaths) and there would be no way to do any kind of wrangling with those missing values.*
+
+
+
+#### 3. Wrangling (40 pts):
+- Use all six core `dplyr` functions in the service of generating summary tables/statistics (12 pts)
+    - Use mutate at least once to generate a variable that is a function of at least one other variable
+
+- Compute summary statistics for each of your variables using `summarize` alone and with `group_by` (if you have more than 10 variables, fine to just focus on 10) (20 pts)
+    - Use at least 5 unique functions inside of summarize (e.g., mean, sd)
+    - For at least 2, use summarize after grouping by a categorical variable. Create one by dichotomizing a numeric if necessary
+    - If applicable, at least 1 of these should group by two categorical variables
+
+- Summarize the procedure and discuss all (or the most interesting) results in no more than two paragraphs (8 pts)
+
+```{r}
+diseases <- diseases %>% mutate(sumcases = wcough+smpox+measles) 
+diseases <- diseases[, c(1, 2, 3, 4, 9, 5, 6, 7, 8)]
+
+
+acc_diseases <- diseases %>% mutate(cases2all = sumcases/alldeaths*100)
+acc_diseases <- acc_diseases[, c(1, 2, 3, 4, 5, 6, 7, 8, 10, 9)]
+
+
+acc_diseases <- acc_diseases %>% mutate(wcough2all = wcough2all/10) 
+acc_diseases <- acc_diseases %>% mutate(smpox2all = smpox2all/10)
+acc_diseases <- acc_diseases %>% mutate(measles2all = measles2all/10)
+acc_diseases <- acc_diseases %>% mutate(cases2all = round(cases2all, 3))
+
+
+acc_diseases %>% filter(date <= median(date)) %>% select(date, wcough, smpox, measles, alldeaths) %>% arrange(desc(alldeaths))
+
+
+acc_diseases <- acc_diseases %>% mutate(time.period = case_when (date>1834 ~ "late", date<=1834 & 1787<=date ~ "mid", date<1787 ~ "early"))
+acc_diseases %>% group_by(time.period) %>% summarize(count=n()) %>% head(3)
+
+
+acc_diseases %>% group_by(time.period) %>% summarize(mean_wcough = mean(wcough,na.rm=T), sd_wcough= sd(wcough, na.rm=T))
+acc_diseases %>% group_by(time.period) %>% summarize(mean_smpox = mean(smpox,na.rm=T), sd_smpox= sd(smpox, na.rm=T))
+acc_diseases %>% group_by(time.period) %>% summarize(mean_measles = mean(measles,na.rm=T), sd_measles= sd(measles, na.rm=T))
+
+
+acc_diseases %>% filter(time.period == "early") %>% select(date, alldeaths) %>% arrange(desc(alldeaths))
+acc_diseases %>% filter(time.period == "mid") %>% select(date, alldeaths) %>% arrange(desc(alldeaths))
+acc_diseases %>% filter(time.period == "late") %>% select(date, alldeaths) %>% arrange(desc(alldeaths))
+acc_diseases %>% group_by(time.period) %>% summarize(min_alldeaths = min(alldeaths,na.rm=T))
+acc_diseases %>% group_by(time.period) %>% summarize(max_alldeaths= max(alldeaths,na.rm=T))
+acc_diseases %>% group_by(time.period) %>% summarize(med_alldeaths= median(alldeaths,na.rm=T))
+
+```
+*Halfway through the documentation of this data, in 1806, the maximum amount of all deaths in London was 32,169. This number, though very large, had a lot of reasons other than whopping cough, smallpox, and measles, that contributed to the high number of deaths in that year. In order to evaluate the number of all deaths by comparing them to the changing times, as well as the contribution of each disease to the amount of total deaths, the `time.period` column was created. This allowed for me to see the increase in the total number of deaths in smaller increments. Although the `time.period` column is technically unevenly distributed - with 47 rows in the early period, 45 rows in the mid period, and 41 rows in the late period - the goal of dividing the yeard into thirds was to divide the dates from 1740 to 1881 into three, even periods. If there hadn't been cases dropped after merging both the `poxetc` and `whoops` datasets, there would have been an even amount of years within each period, but there would have been missing values.*
+*In the `early` time period of this study, from 1740 to 1787, the greatest amount of average cases can be attributed to the smallpox disease, with an average of 2078.426 deaths. In the `mid` time period of this study, from 1787 to 1834, the greatest amount of average cases can be attributed, again, to the smallpox disease, with an average of 1195.667 deaths. In the `late` time period of this study, from 1834 to 1881, the greatest amount of average cases can be attributed to the whooping cough disease, with an average of 2011.5854 deaths. The mean is higher than the standard deviation in greatest amount of average cases when measured within three time periods of the total study, which indicates that more of the data is clustered about the mean. In the `late` time period part of this study, from 1834 to 1881, the greatest amount of deaths, overall, occurred. In every single year located within the last `late` time period, the amount of all deaths was greater than every single year from the `early` and `mid` time periods. This is further proven by finding the min and max of all deaths within each time period, where the min and median of all deaths in the `late` time period is greater than the max amount of deaths within the `early` and `mid` time periods. I'm hypothesizing that this increase in deaths may be due to the increase in urbanization in London - with the first public railroad built in Great Britain opening in 1825. After doing some research for as to why deaths in London were so high in the 19th century, I found that, "developments in transport and commercialization and increased movements of people into and throughout the nation, contributed to this (The Urban Mortality Transition in the United States, 1800-1940 | NBER)."*
+
+
+
+#### 4.Visualizing (30 pts):
+- Create a correlation heatmap of your numeric variables the way we did in class
+
+- Create two more effective, polished plots with ggplot
+
+    - Each plot should map 3+ variables to aesthetics 
+    - Each plot should have a title and clean labeling for all mappings
+    - Change at least one default theme element and color for at least one mapping per plot
+    - For at least one plot, add more tick marks (x, y, or both) than are given by default
+    - For at least one plot, use the stat="summary" function
+    - Supporting paragraph or two (for each plot) describing the relationships/trends that are apparent
+
+```{r}
+cormat <- acc_diseases %>% select_if(is.numeric) %>% cor(use="pair")
+cormat <- cormat %>% round(2)
+cormat
+
+tidycor <- cormat %>% as.data.frame %>% rownames_to_column("var1") %>% pivot_longer(-1,names_to="var2",values_to="correlation")
+tidycor %>% ggplot(aes(var1,var2,fill=correlation)) + geom_tile() + scale_fill_gradient2(low="red",mid="white",high="blue") + geom_text(aes(label=round(correlation,2)),color = "black", size = 3) + coord_fixed() + theme(axis.text.x = element_text(angle = 90, hjust=1))
+
+trial <- acc_diseases %>% pivot_longer(c("measles","smpox","wcough"), names_to="disease_type", values_to="cases")
+
+
+plot1 <- ggplot(trial, aes(x=date, y=cases, color=disease_type)) + geom_line(alpha=0.4) + geom_point() + scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07")) + ggtitle("Cases of Measles, Smallpox, and Whooping Cough in London from 1740-1881") + ylab("Number of Cases") + xlab("Date (Years)")
+plot1 <- update_labels(plot1, list(colour="Disease"))
+
+
+
+plot2 <- plot1 + facet_wrap(~disease_type) + scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) +
+scale_y_continuous(breaks = scales::pretty_breaks(n = 8)) + theme(axis.text.x = element_text(angle = 90, hjust=1)) + theme(legend.position="none")
+
+
+
+plot3 <- ggplot(trial, aes(x=date, y=cases, color=disease_type)) + geom_point() + scale_colour_brewer(palette = "Set1") + geom_line(color="black", aes(y=cases), stat="summary", fun=mean) +  ggtitle("Avg Number of Cases of Measles, Smallpox, and Whooping Cough from 1740-1881") + ylab("Number of Cases") + xlab("Date (Years)") 
+plot3 <- update_labels(plot3, list(colour="Disease"))
+
+plot1
+plot2                       
+plot3
+```
+*In order to create `plot2`, I needed to initially create a scatterplot, with a geom_line in order to connect all of the points so that the viewer can immediately see that there is not more than one point per disease within one year. The connection of the points with the line helps the viewer see that this is a chronological graph, where the number of cases per disease changes every other year. Because the superimposed plots within `plot1` makes it a bit difficult to distinguish between the diseases, despite the contrasting colors, I decided to facet wrap the plots to make them easer to see within `plot2`. In `plot2`, the individually spaced plots allow the viewers to distinguish between the three diseases and allow us to examine the relationship of the number os cases per disease over time. Measles, much like whooping cough before 1840, steadily increased over time and has a few years with outliers, where the number of cases was higher than usual (around 1740, 1780-1790, and 1810-1820). Smallpox had a lot of variation in the number of cases over 1740-1881, with a very distinguishable outlier around 1870, but, unlike measles, smallpox cases experienced an overall decrease over the time period. Like smallpox, whooping cough cases decreased at the very end of the time period.*
+*In `plot3` I superimposed a geom-line over the scatterplot, which plots the average number of cases (measles, smallpox, and whooping cough) from 1740-1881. Although I initially thought that the average number of cases decreased after seeing the both `plot1` and `plot2`, `plot3` proved the findings wrong after showcasing how the overall, average amount of cases increased over time. This finding depicts the relationship of the average number of cases over time that is seen within the `acc_diseases` dataset. This also provides support to my initial hypothesis, where I observed that the sum of the number of cases per disease increased over time due to increases urbanization.*
+
+
+
+
+#### 5. Dimensionality Reduction (30 pts) 
+- Either k-means/PAM clustering or PCA (inclusive "or") should be performed on at least three of your variables (3 is just the minimum: using more/all of them will make this much more interesting!)
+
+    - All relevant steps discussed in class (e.g., picking number of PCs/clusters)
+    - A visualization of the clusters or the first few principal components (using ggplot2)
+    - Supporting paragraph or two describing results found, interpreting the clusters/PCs in terms of the original variables and observations, discussing goodness of fit or variance explained, etc.
+
+
+```{r}
+library(cluster)
+three_diseases <- trial %>% select(disease_type, cases, alldeaths) 
+pam1 <- trial %>% pam(k=3)
+pamcluster <- three_diseases %>% mutate(cluster=as.factor(pam1$cluster))
+pamcluster %>% ggplot(aes(cases, alldeaths, color=disease_type, shape=cluster)) + geom_point(size=3)
+trial %>% ggplot(aes(cases, alldeaths, color=disease_type)) + geom_point()
+```
+*I chose to use PAM to calculate whether the three different types of diseases, whooping cough, measles, and smallpox, would be separated into three different clusters when comparing to all deaths. As I expected, the three different diseases did not divide evenly into three separate clusters - this was expected because each disease still had some number of cases higher than zero every year from 1740-1881, which means that each disease was still incorporating a significant amount of cases to the total amount of deaths during that time period. One thing that was difficult to interpret from previous graphs was the relationship between the amount of cases per disease and all deaths when the number of deaths were really high. This clustering graph allows me to differentiate between clusters when all deaths are high, seen in the different cluster shapes of triangles and circles.*
+
+
+

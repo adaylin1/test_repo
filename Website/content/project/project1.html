@@ -1,0 +1,501 @@
+---
+title: "Project 1: Deaths from Measles and Whooping Cough in London"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+---
+
+
+
+<div id="adaylin-alvarez-aa77336" class="section level2">
+<h2>Adaylin Alvarez aa77336</h2>
+<hr />
+<div id="introduction" class="section level4">
+<h4>0. Introduction:</h4>
+<ul>
+<li>Write a narrative introductory paragraph or two describing the datasets you have chosen, the variables they contain, how they were acquired, and why they are interesting to you. Expand on potential associations you may expect, if any.</li>
+</ul>
+<pre class="r"><code>library(DAAG)
+library(dplyr)
+library(ggplot2)
+
+glimpse(whoops)</code></pre>
+<pre><code>##  Time-Series [1:142, 1:3] from 1740 to 1881: 280 100 122 92 46 135 95 151 150 82 ...
+##  - attr(*, &quot;dimnames&quot;)=List of 2
+##   ..$ : NULL
+##   ..$ : chr [1:3] &quot;wcough&quot; &quot;ratio&quot; &quot;alldeaths&quot;</code></pre>
+<pre class="r"><code>glimpse(poxetc)</code></pre>
+<pre><code>##  Time-Series [1:253, 1:5] from 1629 to 1881: 72 40 58 531 72 ...
+##  - attr(*, &quot;dimnames&quot;)=List of 2
+##   ..$ : NULL
+##   ..$ : chr [1:5] &quot;fpox&quot; &quot;measles&quot; &quot;all&quot; &quot;fpox2all&quot; ...</code></pre>
+<p><em>As a freshman at UT, I worked in an antibiotics laboratory where we conducted research, mainly, on Streptomyces bacteria and a few viruses. The goal of our research was to determine the reasons behind the increased resistance in bacteria against antibiotics and the resistance in viruses against antiviral medication. Due to my past experience in working with both bacteria and viruses as well as my interest in microbiology, I narrowed down my project to examine and compare three of the most infamous bacterial - whooping cough - and viral - measles and smallpox - diseases. Both the <code>whoops</code> and <code>poxetc</code> datasets examine cases of deaths relating to whooping cough, smallpox, and measles in London. The <code>whoops</code> dataset examines deaths from whooping cough, in London from 1740 to 1881, by documenting deaths caused by whooping cough, all deaths, and the ratio between the two within the time frame. The <code>poxetc</code> dataset examines deaths relating to smallpox and measles, in London from 1629 to 1881, by documenting deaths caused by smallpox and measles along with deaths from all causes and the ratio between smallpx and all deaths and measles and all deaths within the time frame. </em></p>
+</div>
+<div id="tidying-rearranging-widelong-10-pts-tidy-the-datasets-using-the-tidyr-functions-pivot_longergather-andor-pivot_widerspread.-if-you-data-sets-are-already-tidy-be-sure-to-use-those-functions-somewhere-else-in-your-project-e.g.-for-rearranging-summary-statistics.-document-the-process-describe-in-words-what-was-done." class="section level4">
+<h4>1. Tidying: Rearranging Wide/Long (10 pts): Tidy the datasets (using the <code>tidyr</code> functions <code>pivot_longer</code>/<code>gather</code> and/or <code>pivot_wider</code>/<code>spread</code>). If you data sets are already tidy, be sure to use those functions somewhere else in your project (e.g., for rearranging summary statistics). Document the process (describe in words what was done).</h4>
+<pre class="r"><code>library(tidyverse)
+library(tibble)
+library(lubridate)
+library(ggplot2)
+
+poxetc &lt;- poxetc %&gt;% as.data.frame() %&gt;% mutate(date = 1629:1881) %&gt;% 
+    rename(smpox = fpox, smpox2all = fpox2all, alldeaths = all)
+whoops &lt;- whoops %&gt;% as.data.frame() %&gt;% mutate(date = 1740:1881) %&gt;% 
+    rename(wcough2all = ratio)
+
+glimpse(poxetc)</code></pre>
+<pre><code>## Rows: 253
+## Columns: 6
+## $ smpox       &lt;dbl&gt; 72, 40, 58, 531, 72, 1354, 293, 127, NA, NA, NA, NA, NA, …
+## $ measles     &lt;dbl&gt; 42, 2, 3, 80, 21, 33, 27, 12, NA, NA, NA, NA, NA, NA, NA,…
+## $ alldeaths   &lt;dbl&gt; 8814, 10471, 8458, 9539, 8427, 10865, 10641, 23382, NA, N…
+## $ smpox2all   &lt;dbl&gt; 8.17, 3.82, 6.85, 55.66, 8.54, 124.62, 27.53, 5.48, NA, N…
+## $ measles2all &lt;dbl&gt; 4.47, 0.19, 0.35, 8.38, 2.49, 3.03, 2.53, 0.51, NA, NA, N…
+## $ date        &lt;int&gt; 1629, 1630, 1631, 1632, 1633, 1634, 1635, 1636, 1637, 163…</code></pre>
+<pre class="r"><code>glimpse(whoops)</code></pre>
+<pre><code>## Rows: 142
+## Columns: 4
+## $ wcough     &lt;dbl&gt; 280, 100, 122, 92, 46, 135, 95, 151, 150, 82, 55, 275, 188…
+## $ wcough2all &lt;dbl&gt; 9.09, 3.10, 4.48, 3.07, 2.23, 6.34, 3.37, 5.92, 6.29, 3.21…
+## $ alldeaths  &lt;dbl&gt; 30811, 32169, 27483, 25200, 20606, 21296, 28157, 25494, 23…
+## $ date       &lt;int&gt; 1740, 1741, 1742, 1743, 1744, 1745, 1746, 1747, 1748, 1749…</code></pre>
+<pre class="r"><code>poxetc_2 &lt;- poxetc %&gt;% unite(measles, measles2all, col = &quot;measles/measles2all&quot;, 
+    sep = &quot;/&quot;)
+poxetc_3 &lt;- poxetc_2 %&gt;% unite(smpox, smpox2all, col = &quot;smpox/smpox2all&quot;, 
+    sep = &quot;/&quot;)
+
+tidypox &lt;- poxetc_3 %&gt;% pivot_longer(contains(&quot;/&quot;)) %&gt;% separate(value, 
+    into = c(&quot;cases&quot;, &quot;ratio2all&quot;), sep = &quot;/&quot;) %&gt;% separate(name, 
+    into = c(&quot;disease&quot;, &quot;ratiodisease&quot;)) %&gt;% pivot_wider(names_from = &quot;disease&quot;, 
+    values_from = &quot;cases&quot;) %&gt;% pivot_wider(names_from = &quot;ratiodisease&quot;, 
+    values_from = &quot;ratio2all&quot;) %&gt;% group_by(date) %&gt;% summarise_all(funs(toString(na.omit(.)))) %&gt;% 
+    separate(alldeaths, c(&quot;alldeaths&quot;, NA), sep = &quot;, &quot;)
+
+
+
+whoops_2 &lt;- whoops %&gt;% unite(wcough, wcough2all, col = &quot;whoops/whoops2all&quot;, 
+    sep = &quot;/&quot;)
+tidywhoops &lt;- whoops_2 %&gt;% pivot_longer(contains(&quot;/&quot;)) %&gt;% separate(value, 
+    into = c(&quot;wcough&quot;, &quot;wcough2all&quot;), sep = &quot;/&quot;) %&gt;% select(-name)
+
+glimpse(tidypox)</code></pre>
+<pre><code>## Rows: 253
+## Columns: 6
+## $ date        &lt;int&gt; 1629, 1630, 1631, 1632, 1633, 1634, 1635, 1636, 1637, 163…
+## $ alldeaths   &lt;chr&gt; &quot;8814&quot;, &quot;10471&quot;, &quot;8458&quot;, &quot;9539&quot;, &quot;8427&quot;, &quot;10865&quot;, &quot;10641&quot;…
+## $ smpox       &lt;chr&gt; &quot;72&quot;, &quot;40&quot;, &quot;58&quot;, &quot;531&quot;, &quot;72&quot;, &quot;1354&quot;, &quot;293&quot;, &quot;127&quot;, &quot;NA&quot;…
+## $ measles     &lt;chr&gt; &quot;42&quot;, &quot;2&quot;, &quot;3&quot;, &quot;80&quot;, &quot;21&quot;, &quot;33&quot;, &quot;27&quot;, &quot;12&quot;, &quot;NA&quot;, &quot;NA&quot;,…
+## $ smpox2all   &lt;chr&gt; &quot;8.17&quot;, &quot;3.82&quot;, &quot;6.85&quot;, &quot;55.66&quot;, &quot;8.54&quot;, &quot;124.62&quot;, &quot;27.53…
+## $ measles2all &lt;chr&gt; &quot;4.47&quot;, &quot;0.19&quot;, &quot;0.35&quot;, &quot;8.38&quot;, &quot;2.49&quot;, &quot;3.03&quot;, &quot;2.53&quot;, &quot;…</code></pre>
+<pre class="r"><code>glimpse(tidywhoops)</code></pre>
+<pre><code>## Rows: 142
+## Columns: 4
+## $ alldeaths  &lt;dbl&gt; 30811, 32169, 27483, 25200, 20606, 21296, 28157, 25494, 23…
+## $ date       &lt;int&gt; 1740, 1741, 1742, 1743, 1744, 1745, 1746, 1747, 1748, 1749…
+## $ wcough     &lt;chr&gt; &quot;280&quot;, &quot;100&quot;, &quot;122&quot;, &quot;92&quot;, &quot;46&quot;, &quot;135&quot;, &quot;95&quot;, &quot;151&quot;, &quot;150&quot;…
+## $ wcough2all &lt;chr&gt; &quot;9.09&quot;, &quot;3.1&quot;, &quot;4.48&quot;, &quot;3.07&quot;, &quot;2.23&quot;, &quot;6.34&quot;, &quot;3.37&quot;, &quot;5.…</code></pre>
+</div>
+<div id="joiningmerging-10-pts" class="section level4">
+<h4>2. Joining/Merging (10 pts):</h4>
+<ul>
+<li>Join your datasets into one using a <code>dplyr</code> join function</li>
+<li>If you have multiple observations on the joining variable in either dataset, fix this by collapsing via summarize</li>
+<li>Discuss the process in words, including why you chose the join you did</li>
+<li>Discuss which cases were dropped, if any, and potential problems with this</li>
+</ul>
+<pre class="r"><code>diseases_messy &lt;- inner_join(whoops, poxetc, by = c(date = &quot;date&quot;)) %&gt;% 
+    select(-alldeaths.x) %&gt;% rename(alldeaths = alldeaths.y)
+
+diseases &lt;- diseases_messy[, c(3, 1, 4, 5, 2, 7, 8, 6)]
+
+diseases %&gt;% nrow()</code></pre>
+<pre><code>## [1] 142</code></pre>
+<pre class="r"><code>diseases %&gt;% summarise_all(funs(sum(is.na(.))))</code></pre>
+<pre><code>##   date wcough smpox measles wcough2all smpox2all measles2all alldeaths
+## 1    0      0     9       9          0         9           9         9</code></pre>
+<pre class="r"><code>diseases %&gt;% tidyr::drop_na() %&gt;% nrow()</code></pre>
+<pre><code>## [1] 133</code></pre>
+<pre class="r"><code>diseases &lt;- diseases %&gt;% tidyr::drop_na()
+diseases</code></pre>
+<pre><code>##    date wcough smpox measles wcough2all smpox2all measles2all alldeaths
+## 1  1740    280  2725      46       9.09     88.44        1.48     30811
+## 2  1741    100  1977      42       3.10     61.45        1.30     32169
+## 3  1742    122  1429     981       4.48     51.99       35.69     27483
+## 4  1743     92  2029      17       3.07     80.51        0.67     25200
+## 5  1744     46  1633       5       2.23     79.24        0.24     20606
+## 6  1745    135  1206      14       6.34     56.63        0.65     21296
+## 7  1746     95  3236     250       3.37    114.92        8.87     28157
+## 8  1747    151  1380      81       5.92     54.13        3.17     25494
+## 9  1748    150  1789      10       6.29     74.95        0.41     23869
+## 10 1749     82  2625     106       3.21    102.87        4.15     25516
+## 11 1750     55  1229     321       2.32     52.64       13.52     23727
+## 12 1751    275   998      21      13.08     47.46        0.99     21028
+##  [ reached &#39;max&#39; / getOption(&quot;max.print&quot;) -- omitted 121 rows ]</code></pre>
+<p><em>Both the <code>poxetc</code> and <code>whoops</code> datasets were joined using the <code>inner_join</code> function because I wanted to compare all documented cases to each other as well as to all deaths. Because both datasets had the same values for <code>alldeaths</code>, I only kept one of the columns. In order to clean the joined dataset and make it look nicer, I rearranged the columns to allow an easy comparison between individual cases and between ratios of cases to all deaths. This then allowed for me to easily see the missing values, which were eliminated because there were no values for any numeric column of interest - other than all deaths) and there would be no way to do any kind of wrangling with those missing values.</em></p>
+</div>
+<div id="wrangling-40-pts" class="section level4">
+<h4>3. Wrangling (40 pts):</h4>
+<ul>
+<li>Use all six core <code>dplyr</code> functions in the service of generating summary tables/statistics (12 pts)
+<ul>
+<li>Use mutate at least once to generate a variable that is a function of at least one other variable</li>
+</ul></li>
+<li>Compute summary statistics for each of your variables using <code>summarize</code> alone and with <code>group_by</code> (if you have more than 10 variables, fine to just focus on 10) (20 pts)
+<ul>
+<li>Use at least 5 unique functions inside of summarize (e.g., mean, sd)</li>
+<li>For at least 2, use summarize after grouping by a categorical variable. Create one by dichotomizing a numeric if necessary</li>
+<li>If applicable, at least 1 of these should group by two categorical variables</li>
+</ul></li>
+<li>Summarize the procedure and discuss all (or the most interesting) results in no more than two paragraphs (8 pts)</li>
+</ul>
+<pre class="r"><code>diseases &lt;- diseases %&gt;% mutate(sumcases = wcough + smpox + measles)
+diseases &lt;- diseases[, c(1, 2, 3, 4, 9, 5, 6, 7, 8)]
+
+
+acc_diseases &lt;- diseases %&gt;% mutate(cases2all = sumcases/alldeaths * 
+    100)
+acc_diseases &lt;- acc_diseases[, c(1, 2, 3, 4, 5, 6, 7, 8, 10, 
+    9)]
+
+
+acc_diseases &lt;- acc_diseases %&gt;% mutate(wcough2all = wcough2all/10)
+acc_diseases &lt;- acc_diseases %&gt;% mutate(smpox2all = smpox2all/10)
+acc_diseases &lt;- acc_diseases %&gt;% mutate(measles2all = measles2all/10)
+acc_diseases &lt;- acc_diseases %&gt;% mutate(cases2all = round(cases2all, 
+    3))
+
+
+acc_diseases %&gt;% filter(date &lt;= median(date)) %&gt;% select(date, 
+    wcough, smpox, measles, alldeaths) %&gt;% arrange(desc(alldeaths))</code></pre>
+<pre><code>##    date wcough smpox measles alldeaths
+## 1  1741    100  1977      42     32169
+## 2  1740    280  2725      46     30811
+## 3  1746     95  3236     250     28157
+## 4  1742    122  1429     981     27483
+## 5  1762    300  2743     122     26326
+## 6  1763    291  3582     610     26148
+## 7  1772    385  3992     211     26053
+## 8  1749     82  2625     106     25516
+## 9  1747    151  1380      81     25494
+## 10 1743     92  2029      17     25200
+## 11 1766    213  2334     482     23911
+## 12 1748    150  1789      10     23869
+## 13 1750     55  1229     321     23727
+## 14 1768    262  3028     409     23639
+## 15 1777    536  2567     145     23334
+## 16 1765    225  2498      54     23230
+## 17 1764    251  2382      65     23202
+## 18 1800    380  2409     395     23068
+## 19 1754    336  2359      12     22696
+## 20 1767    364  2188      80     22612
+##  [ reached &#39;max&#39; / getOption(&quot;max.print&quot;) -- omitted 47 rows ]</code></pre>
+<pre class="r"><code>acc_diseases &lt;- acc_diseases %&gt;% mutate(time.period = case_when(date &gt; 
+    1834 ~ &quot;late&quot;, date &lt;= 1834 &amp; 1787 &lt;= date ~ &quot;mid&quot;, date &lt; 
+    1787 ~ &quot;early&quot;))
+acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(count = n()) %&gt;% 
+    head(3)</code></pre>
+<pre><code>## # A tibble: 3 x 2
+##   time.period count
+##   &lt;chr&gt;       &lt;int&gt;
+## 1 early          47
+## 2 late           41
+## 3 mid            45</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(mean_wcough = mean(wcough, 
+    na.rm = T), sd_wcough = sd(wcough, na.rm = T))</code></pre>
+<pre><code>## # A tibble: 3 x 3
+##   time.period mean_wcough sd_wcough
+##   &lt;chr&gt;             &lt;dbl&gt;     &lt;dbl&gt;
+## 1 early              235.      131.
+## 2 late              2012.     1171.
+## 3 mid                577.      255.</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(mean_smpox = mean(smpox, 
+    na.rm = T), sd_smpox = sd(smpox, na.rm = T))</code></pre>
+<pre><code>## # A tibble: 3 x 3
+##   time.period mean_smpox sd_smpox
+##   &lt;chr&gt;            &lt;dbl&gt;    &lt;dbl&gt;
+## 1 early            2078.     805.
+## 2 late             1020.    1269.
+## 3 mid              1196.     672.</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(mean_measles = mean(measles, 
+    na.rm = T), sd_measles = sd(measles, na.rm = T))</code></pre>
+<pre><code>## # A tibble: 3 x 3
+##   time.period mean_measles sd_measles
+##   &lt;chr&gt;              &lt;dbl&gt;      &lt;dbl&gt;
+## 1 early               214.       217.
+## 2 late               1575        537.
+## 3 mid                 519.       294.</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% filter(time.period == &quot;early&quot;) %&gt;% select(date, 
+    alldeaths) %&gt;% arrange(desc(alldeaths))</code></pre>
+<pre><code>##    date alldeaths
+## 1  1741     32169
+## 2  1740     30811
+## 3  1746     28157
+## 4  1742     27483
+## 5  1762     26326
+## 6  1763     26148
+## 7  1772     26053
+## 8  1749     25516
+## 9  1747     25494
+## 10 1743     25200
+## 11 1766     23911
+## 12 1748     23869
+## 13 1750     23727
+## 14 1768     23639
+## 15 1777     23334
+## 16 1765     23230
+## 17 1764     23202
+## 18 1754     22696
+## 19 1767     22612
+## 20 1770     22434
+## 21 1755     21917
+## 22 1769     21847
+## 23 1771     21780
+## 24 1773     21656
+## 25 1757     21313
+## 26 1745     21296
+## 27 1761     21063
+## 28 1751     21028
+## 29 1774     20884
+## 30 1756     20872
+## 31 1781     20709
+## 32 1744     20606
+## 33 1780     20517
+## 34 1775     20514
+## 35 1752     20485
+## 36 1786     20454
+## 37 1779     20420
+## 38 1778     20399
+## 39 1760     19830
+## 40 1759     19604
+## 41 1753     19276
+## 42 1776     19048
+## 43 1783     19029
+## 44 1785     18919
+## 45 1782     17918
+## 46 1784     17828
+## 47 1758     17576</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% filter(time.period == &quot;mid&quot;) %&gt;% select(date, 
+    alldeaths) %&gt;% arrange(desc(alldeaths))</code></pre>
+<pre><code>##    date alldeaths
+## 1  1831     25337
+## 2  1829     23524
+## 3  1800     23068
+## 4  1827     22292
+## 5  1793     21749
+## 6  1828     21709
+## 7  1830     21645
+## 8  1795     21179
+## 9  1825     21026
+## 10 1826     20758
+## 11 1789     20749
+## 12 1823     20587
+## 13 1816     20316
+## 14 1824     20237
+## 15 1792     20213
+## 16 1817     19968
+## 17 1808     19954
+## 18 1810     19893
+## 19 1818     19705
+## 20 1788     19697
+## 21 1803     19582
+## 22 1815     19560
+## 23 1802     19379
+## 24 1801     19374
+## 25 1787     19349
+## 26 1820     19348
+## 27 1796     19288
+## 28 1814     19283
+## 29 1794     19241
+## 30 1819     19228
+## 31 1822     18865
+## 32 1791     18760
+## 33 1821     18451
+## 34 1807     18334
+## 35 1812     18295
+## 36 1798     18155
+## 37 1799     18134
+## 38 1790     18038
+## 39 1806     17938
+## 40 1805     17565
+## 41 1813     17322
+## 42 1811     17043
+## 43 1804     17034
+## 44 1797     17014
+## 45 1809     16680</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% filter(time.period == &quot;late&quot;) %&gt;% select(date, 
+    alldeaths) %&gt;% arrange(desc(alldeaths))</code></pre>
+<pre><code>##    date alldeaths
+## 1  1878     84188
+## 2  1879     83805
+## 3  1875     81964
+## 4  1880     81128
+## 5  1881     81071
+## 6  1866     80453
+## 7  1871     80430
+## 8  1864     78238
+## 9  1869     78082
+## 10 1876     77671
+## 11 1870     77634
+## 12 1877     77449
+## 13 1874     76813
+## 14 1873     75459
+## 15 1868     73798
+## 16 1854     73697
+## 17 1865     73531
+## 18 1872     71355
+## 19 1863     71060
+## 20 1867     70924
+## 21 1849     68755
+## 22 1862     67371
+## 23 1861     65251
+## 24 1858     64093
+## 25 1860     62309
+## 26 1855     61942
+## 27 1859     61860
+## 28 1853     60069
+## 29 1847     59131
+## 30 1857     59103
+## 31 1848     57771
+## 32 1856     57274
+## 33 1851     55488
+## 34 1852     54638
+## 35 1844     51110
+## 36 1846     49450
+## 37 1850     48950
+## 38 1843     48718
+## 39 1845     48318
+## 40 1841     45507
+## 41 1842     45400</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(min_alldeaths = min(alldeaths, 
+    na.rm = T))</code></pre>
+<pre><code>## # A tibble: 3 x 2
+##   time.period min_alldeaths
+##   &lt;chr&gt;               &lt;dbl&gt;
+## 1 early               17576
+## 2 late                45400
+## 3 mid                 16680</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(max_alldeaths = max(alldeaths, 
+    na.rm = T))</code></pre>
+<pre><code>## # A tibble: 3 x 2
+##   time.period max_alldeaths
+##   &lt;chr&gt;               &lt;dbl&gt;
+## 1 early               32169
+## 2 late                84188
+## 3 mid                 25337</code></pre>
+<pre class="r"><code>acc_diseases %&gt;% group_by(time.period) %&gt;% summarize(med_alldeaths = median(alldeaths, 
+    na.rm = T))</code></pre>
+<pre><code>## # A tibble: 3 x 2
+##   time.period med_alldeaths
+##   &lt;chr&gt;               &lt;dbl&gt;
+## 1 early               21656
+## 2 late                68755
+## 3 mid                 19379</code></pre>
+<p><em>Halfway through the documentation of this data, in 1806, the maximum amount of all deaths in London was 32,169. This number, though very large, had a lot of reasons other than whopping cough, smallpox, and measles, that contributed to the high number of deaths in that year. In order to evaluate the number of all deaths by comparing them to the changing times, as well as the contribution of each disease to the amount of total deaths, the <code>time.period</code> column was created. This allowed for me to see the increase in the total number of deaths in smaller increments. Although the <code>time.period</code> column is technically unevenly distributed - with 47 rows in the early period, 45 rows in the mid period, and 41 rows in the late period - the goal of dividing the yeard into thirds was to divide the dates from 1740 to 1881 into three, even periods. If there hadn’t been cases dropped after merging both the <code>poxetc</code> and <code>whoops</code> datasets, there would have been an even amount of years within each period, but there would have been missing values.</em>
+<em>In the <code>early</code> time period of this study, from 1740 to 1787, the greatest amount of average cases can be attributed to the smallpox disease, with an average of 2078.426 deaths. In the <code>mid</code> time period of this study, from 1787 to 1834, the greatest amount of average cases can be attributed, again, to the smallpox disease, with an average of 1195.667 deaths. In the <code>late</code> time period of this study, from 1834 to 1881, the greatest amount of average cases can be attributed to the whooping cough disease, with an average of 2011.5854 deaths. The mean is higher than the standard deviation in greatest amount of average cases when measured within three time periods of the total study, which indicates that more of the data is clustered about the mean. In the <code>late</code> time period part of this study, from 1834 to 1881, the greatest amount of deaths, overall, occurred. In every single year located within the last <code>late</code> time period, the amount of all deaths was greater than every single year from the <code>early</code> and <code>mid</code> time periods. This is further proven by finding the min and max of all deaths within each time period, where the min and median of all deaths in the <code>late</code> time period is greater than the max amount of deaths within the <code>early</code> and <code>mid</code> time periods. I’m hypothesizing that this increase in deaths may be due to the increase in urbanization in London - with the first public railroad built in Great Britain opening in 1825. After doing some research for as to why deaths in London were so high in the 19th century, I found that, “developments in transport and commercialization and increased movements of people into and throughout the nation, contributed to this (The Urban Mortality Transition in the United States, 1800-1940 | NBER).”</em></p>
+</div>
+<div id="visualizing-30-pts" class="section level4">
+<h4>4.Visualizing (30 pts):</h4>
+<ul>
+<li><p>Create a correlation heatmap of your numeric variables the way we did in class</p></li>
+<li><p>Create two more effective, polished plots with ggplot</p>
+<ul>
+<li>Each plot should map 3+ variables to aesthetics</li>
+<li>Each plot should have a title and clean labeling for all mappings</li>
+<li>Change at least one default theme element and color for at least one mapping per plot</li>
+<li>For at least one plot, add more tick marks (x, y, or both) than are given by default</li>
+<li>For at least one plot, use the stat=“summary” function</li>
+<li>Supporting paragraph or two (for each plot) describing the relationships/trends that are apparent</li>
+</ul></li>
+</ul>
+<pre class="r"><code>cormat &lt;- acc_diseases %&gt;% select_if(is.numeric) %&gt;% cor(use = &quot;pair&quot;)
+cormat &lt;- cormat %&gt;% round(2)
+cormat</code></pre>
+<pre><code>##              date wcough smpox measles sumcases wcough2all smpox2all
+## date         1.00   0.66 -0.42    0.84     0.50       0.52     -0.73
+## wcough       0.66   1.00 -0.20    0.57     0.76       0.71     -0.52
+## smpox       -0.42  -0.20  1.00   -0.34     0.39      -0.28      0.75
+## measles      0.84   0.57 -0.34    1.00     0.58       0.28     -0.67
+## sumcases     0.50   0.76  0.39    0.58     1.00       0.39     -0.13
+## wcough2all   0.52   0.71 -0.28    0.28     0.39       1.00     -0.39
+## smpox2all   -0.73  -0.52  0.75   -0.67    -0.13      -0.39      1.00
+## measles2all  0.45   0.22 -0.38    0.58     0.14       0.38     -0.43
+## cases2all   -0.47  -0.19  0.66   -0.44     0.13       0.09      0.79
+## alldeaths    0.81   0.63 -0.19    0.84     0.64       0.17     -0.61
+##             measles2all cases2all alldeaths
+## date               0.45     -0.47      0.81
+## wcough             0.22     -0.19      0.63
+## smpox             -0.38      0.66     -0.19
+## measles            0.58     -0.44      0.84
+## sumcases           0.14      0.13      0.64
+## wcough2all         0.38      0.09      0.17
+## smpox2all         -0.43      0.79     -0.61
+## measles2all        1.00     -0.03      0.16
+## cases2all         -0.03      1.00     -0.58
+## alldeaths          0.16     -0.58      1.00</code></pre>
+<pre class="r"><code>tidycor &lt;- cormat %&gt;% as.data.frame %&gt;% rownames_to_column(&quot;var1&quot;) %&gt;% 
+    pivot_longer(-1, names_to = &quot;var2&quot;, values_to = &quot;correlation&quot;)
+tidycor %&gt;% ggplot(aes(var1, var2, fill = correlation)) + geom_tile() + 
+    scale_fill_gradient2(low = &quot;red&quot;, mid = &quot;white&quot;, high = &quot;blue&quot;) + 
+    geom_text(aes(label = round(correlation, 2)), color = &quot;black&quot;, 
+        size = 3) + coord_fixed() + theme(axis.text.x = element_text(angle = 90, 
+    hjust = 1))</code></pre>
+<p><img src="/project/project1_files/figure-html/unnamed-chunk-5-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>trial &lt;- acc_diseases %&gt;% pivot_longer(c(&quot;measles&quot;, &quot;smpox&quot;, 
+    &quot;wcough&quot;), names_to = &quot;disease_type&quot;, values_to = &quot;cases&quot;)
+
+
+plot1 &lt;- ggplot(trial, aes(x = date, y = cases, color = disease_type)) + 
+    geom_line(alpha = 0.4) + geom_point() + scale_color_manual(values = c(&quot;#00AFBB&quot;, 
+    &quot;#E7B800&quot;, &quot;#FC4E07&quot;)) + ggtitle(&quot;Cases of Measles, Smallpox, and Whooping Cough in London from 1740-1881&quot;) + 
+    ylab(&quot;Number of Cases&quot;) + xlab(&quot;Date (Years)&quot;)
+plot1 &lt;- update_labels(plot1, list(colour = &quot;Disease&quot;))
+
+
+
+plot2 &lt;- plot1 + facet_wrap(~disease_type) + scale_x_continuous(breaks = scales::pretty_breaks(n = 8)) + 
+    scale_y_continuous(breaks = scales::pretty_breaks(n = 8)) + 
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+    theme(legend.position = &quot;none&quot;)
+
+
+
+plot3 &lt;- ggplot(trial, aes(x = date, y = cases, color = disease_type)) + 
+    geom_point() + scale_colour_brewer(palette = &quot;Set1&quot;) + geom_line(color = &quot;black&quot;, 
+    aes(y = cases), stat = &quot;summary&quot;, fun = mean) + ggtitle(&quot;Avg Number of Cases of Measles, Smallpox, and Whooping Cough from 1740-1881&quot;) + 
+    ylab(&quot;Number of Cases&quot;) + xlab(&quot;Date (Years)&quot;)
+plot3 &lt;- update_labels(plot3, list(colour = &quot;Disease&quot;))
+
+plot1</code></pre>
+<p><img src="/project/project1_files/figure-html/unnamed-chunk-5-2.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>plot2</code></pre>
+<p><img src="/project/project1_files/figure-html/unnamed-chunk-5-3.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>plot3</code></pre>
+<p><img src="/project/project1_files/figure-html/unnamed-chunk-5-4.png" width="672" style="display: block; margin: auto;" />
+<em>In order to create <code>plot2</code>, I needed to initially create a scatterplot, with a geom_line in order to connect all of the points so that the viewer can immediately see that there is not more than one point per disease within one year. The connection of the points with the line helps the viewer see that this is a chronological graph, where the number of cases per disease changes every other year. Because the superimposed plots within <code>plot1</code> makes it a bit difficult to distinguish between the diseases, despite the contrasting colors, I decided to facet wrap the plots to make them easer to see within <code>plot2</code>. In <code>plot2</code>, the individually spaced plots allow the viewers to distinguish between the three diseases and allow us to examine the relationship of the number os cases per disease over time. Measles, much like whooping cough before 1840, steadily increased over time and has a few years with outliers, where the number of cases was higher than usual (around 1740, 1780-1790, and 1810-1820). Smallpox had a lot of variation in the number of cases over 1740-1881, with a very distinguishable outlier around 1870, but, unlike measles, smallpox cases experienced an overall decrease over the time period. Like smallpox, whooping cough cases decreased at the very end of the time period.</em>
+<em>In <code>plot3</code> I superimposed a geom-line over the scatterplot, which plots the average number of cases (measles, smallpox, and whooping cough) from 1740-1881. Although I initially thought that the average number of cases decreased after seeing the both <code>plot1</code> and <code>plot2</code>, <code>plot3</code> proved the findings wrong after showcasing how the overall, average amount of cases increased over time. This finding depicts the relationship of the average number of cases over time that is seen within the <code>acc_diseases</code> dataset. This also provides support to my initial hypothesis, where I observed that the sum of the number of cases per disease increased over time due to increases urbanization.</em></p>
+</div>
+<div id="dimensionality-reduction-30-pts" class="section level4">
+<h4>5. Dimensionality Reduction (30 pts)</h4>
+<ul>
+<li><p>Either k-means/PAM clustering or PCA (inclusive “or”) should be performed on at least three of your variables (3 is just the minimum: using more/all of them will make this much more interesting!)</p>
+<ul>
+<li>All relevant steps discussed in class (e.g., picking number of PCs/clusters)</li>
+<li>A visualization of the clusters or the first few principal components (using ggplot2)</li>
+<li>Supporting paragraph or two describing results found, interpreting the clusters/PCs in terms of the original variables and observations, discussing goodness of fit or variance explained, etc.</li>
+</ul></li>
+</ul>
+<pre class="r"><code>library(cluster)
+three_diseases &lt;- trial %&gt;% select(disease_type, cases, alldeaths)
+pam1 &lt;- trial %&gt;% pam(k = 3)
+pamcluster &lt;- three_diseases %&gt;% mutate(cluster = as.factor(pam1$cluster))
+pamcluster %&gt;% ggplot(aes(cases, alldeaths, color = disease_type, 
+    shape = cluster)) + geom_point(size = 3)</code></pre>
+<p><img src="/project/project1_files/figure-html/unnamed-chunk-6-1.png" width="672" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>trial %&gt;% ggplot(aes(cases, alldeaths, color = disease_type)) + 
+    geom_point()</code></pre>
+<p><img src="/project/project1_files/figure-html/unnamed-chunk-6-2.png" width="672" style="display: block; margin: auto;" />
+<em>I chose to use PAM to calculate whether the three different types of diseases, whooping cough, measles, and smallpox, would be separated into three different clusters when comparing to all deaths. As I expected, the three different diseases did not divide evenly into three separate clusters - this was expected because each disease still had some number of cases higher than zero every year from 1740-1881, which means that each disease was still incorporating a significant amount of cases to the total amount of deaths during that time period. One thing that was difficult to interpret from previous graphs was the relationship between the amount of cases per disease and all deaths when the number of deaths were really high. This clustering graph allows me to differentiate between clusters when all deaths are high, seen in the different cluster shapes of triangles and circles.</em></p>
+</div>
+</div>
